@@ -1,7 +1,7 @@
 {
   "name": "apu-04-limpieza-textual",
-  "version": "0.1.0",
-  "description": "APU-04: limpieza, normalización, anonimización y control de calidad de transcripciones clínicas/cualitativas. Repositorio en fase de especificación, sin código de aplicación todavía.",
+  "version": "1.0.0",
+  "description": "APU-04: limpieza, normalización, anonimización y control de calidad de transcripciones clínicas/cualitativas. Aplicación web local-first funcional.",
   "type": "module",
   "private": true,
   "scripts": {
