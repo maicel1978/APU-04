@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>APU-04 — Limpieza textual y control de calidad</title>
+  <!--
+    Debe abrirse siempre a través de un servidor local (`npm start`), nunca con doble clic
+    (protocolo file://): usa Web Worker con módulos ES e import de módulos JSON (ES2025),
+    que la mayoría de navegadores restringen bajo file:// por política de mismo origen.
+
+    Si src/main.js no llega a ejecutarse (p. ej. por abrir con file://), el navegador
+    bloquea el módulo por política CORS antes de que la app arranque. El script clásico
+    embebido más abajo corre siempre, incluso en ese caso, y muestra un mensaje
+    accionable en vez de dejar una página en blanco.
+  -->
+  <link rel="stylesheet" href="./assets/styles/app.css" />
+</head>
+<body>
+  <noscript>Esta aplicación requiere JavaScript habilitado en el navegador.</noscript>
+
+  <div id="app"></div>
+
+  <div id="boot-fallback" class="boot-fallback is-hidden" role="alert" aria-live="assertive"></div>
+
+  <script>
+    // Script clásico (NO módulo): se ejecuta siempre, incluso cuando el navegador
+    // bloquea la carga de src/main.js por protocolo file:// (ver comentario arriba).
+    // No usa fetch/XHR/red alguna, solo lectura de location.protocol y manipulación
+    // del DOM local. Expone window.__apu04Boot para que src/main.js reporte éxito o
+    // error real de arranque (p. ej. datos base faltantes).
+    (function () {
+      var fallback = document.getElementById('boot-fallback');
+      var timeoutId = null;
+
+      function show(html) {
+        if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+        fallback.innerHTML = html;
+        fallback.classList.remove('is-hidden');
+      }
+
+      window.__apu04Boot = {
+        hide: function () {
+          if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+          fallback.classList.add('is-hidden');
+        },
+        fail: function (message) {
+          show(
+            '<h2>No se pudo iniciar la aplicación</h2>' +
+            '<p>' + message + '</p>'
+          );
+        },
+      };
+
+      if (location.protocol === 'file:') {
+        show(
+          '<h2>Abra la aplicación mediante el servidor local</h2>' +
+          '<p>Esta aplicación no puede ejecutarse abriendo el archivo directamente con doble clic. ' +
+          'Desde una terminal, dentro de esta carpeta, ejecute:</p>' +
+          '<pre>npm install\nnpm start</pre>' +
+          '<p>Luego abra esta dirección en su navegador:</p>' +
+          '<pre>http://127.0.0.1:8080/</pre>'
+        );
+      } else {
+        // Reserva genérica: si por cualquier otro motivo (navegador desactualizado,
+        // bloqueador de scripts, red interna restringida) src/main.js nunca llega a
+        // ejecutarse, se avisa en vez de dejar una página en blanco.
+        timeoutId = setTimeout(function () {
+          if (!document.getElementById('app').hasChildNodes()) {
+            show(
+              '<h2>No se pudo iniciar la aplicación</h2>' +
+              '<p>Verifique que esté usando un navegador reciente (Chrome, Firefox o Safari) ' +
+              'y que esta página se abrió mediante <code>npm start</code>. ' +
+              'Si el problema persiste, revise la consola del navegador (F12) para más detalles.</p>'
+            );
+          }
+        }, 4000);
+      }
+    })();
+  </script>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0.0",
+  "ecosystem": "APU",
+  "unit": "APU-04",
+  "stage": "ner-patterns",
+  "regexPatterns": [
+    { "label": "[FECHA]", "pattern": "\\b\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}\\b" },
+    { "label": "[TELÉFONO]", "pattern": "\\b\\+?\\d{7,12}\\b" }
+  ],
+  "listMatchers": [
+    { "label": "[NOMBRE]", "source": "studio-consentimiento", "values": [] },
+    { "label": "[HOSPITAL]", "source": "covariates.site", "values": [] },
+    { "label": "[DIRECCIÓN]", "source": "manual", "values": [] }
+  ]
+}

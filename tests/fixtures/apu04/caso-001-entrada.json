@@ -1,0 +1,69 @@
+{
+  "studyId": "estudio-ansiedad-2026",
+  "covariates": {
+    "caseId": "caso-001",
+    "group": "intervencion",
+    "moment": "pre",
+    "sex": "F",
+    "age": 34,
+    "site": "Hospital Central",
+    "diagnosis": "Trastorno de ansiedad generalizada"
+  },
+  "sourceRefs": {
+    "sourceAudioFileName": "estudio-ansiedad-2026_caso-001_prepared.wav",
+    "sourceManifestRef": "estudio-ansiedad-2026_caso-001_prepared_manifest.json",
+    "sourceManifestHash": null,
+    "sourceTranscriptRef": "estudio-ansiedad-2026_caso-001_speakers.json",
+    "sourceTranscriptHash": null
+  },
+  "segments": [
+    {
+      "segmentId": "seg-001",
+      "text": "la redacción logística mostró un buen ajuste según el modelo",
+      "start": 0.0,
+      "end": 4.0,
+      "speakerId": "spk-2",
+      "confidence": 0.91
+    },
+    {
+      "segmentId": "seg-002",
+      "text": "el paciente juan perez fue atendido en el hospital central el 12/05/2023",
+      "start": 4.0,
+      "end": 9.0,
+      "speakerId": "spk-2",
+      "confidence": 0.78
+    },
+    {
+      "segmentId": "seg-003",
+      "text": "esto es una prueba de habla muy rapida con muchas palabras seguidas sin pausas",
+      "start": 9.0,
+      "end": 11.0,
+      "speakerId": "spk-2",
+      "confidence": null
+    },
+    {
+      "segmentId": "seg-004",
+      "text": "despues de una larga pausa el participante continuo hablando",
+      "start": 17.0,
+      "end": 20.0,
+      "speakerId": "spk-1",
+      "confidence": 0.95
+    },
+    {
+      "segmentId": "seg-005",
+      "text": "silencio eh no se",
+      "start": 20.0,
+      "end": 30.0,
+      "speakerId": "spk-2",
+      "confidence": 0.55
+    },
+    {
+      "segmentId": "seg-006",
+      "text": "muchas gracias por su tiempo doctor",
+      "start": 30.5,
+      "end": 34.5,
+      "speakerId": "spk-2",
+      "confidence": 0.93
+    }
+  ]
+}

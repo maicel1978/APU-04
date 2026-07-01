@@ -1,0 +1,27 @@
+{
+  "name": "apu-04-limpieza-textual",
+  "version": "0.1.0",
+  "description": "APU-04: limpieza, normalización, anonimización y control de calidad de transcripciones clínicas/cualitativas. Repositorio en fase de especificación, sin código de aplicación todavía.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/ tests/apu04-static-audit.mjs",
+    "start": "node scripts/serve.mjs"
+  },
+  "keywords": [
+    "text-cleaning",
+    "nlp",
+    "clinical-research",
+    "qualitative-research",
+    "anonymization",
+    "privacy",
+    "vanilla-js",
+    "web-worker"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

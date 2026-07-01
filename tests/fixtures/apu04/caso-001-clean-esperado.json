@@ -1,0 +1,164 @@
+{
+  "schemaVersion": "1.0.0",
+  "ecosystem": "APU",
+  "unit": "APU-04",
+  "stage": "clean-text",
+  "studyId": "estudio-ansiedad-2026",
+  "covariates": {
+    "caseId": "caso-001",
+    "group": "intervencion",
+    "moment": "pre",
+    "sex": "F",
+    "age": 34,
+    "site": "Hospital Central",
+    "diagnosis": "Trastorno de ansiedad generalizada"
+  },
+  "source_hash": null,
+  "sourceRefs": {
+    "sourceAudioFileName": "estudio-ansiedad-2026_caso-001_prepared.wav",
+    "sourceManifestRef": "estudio-ansiedad-2026_caso-001_prepared_manifest.json",
+    "sourceManifestHash": null,
+    "sourceTranscriptRef": "estudio-ansiedad-2026_caso-001_speakers.json",
+    "sourceTranscriptHash": null
+  },
+  "auditLog": {
+    "version": "0.3",
+    "lastModified": "IGNORAR_EN_COMPARACION",
+    "termsCorrectedCount": 1,
+    "finalizedByHuman": false
+  },
+  "segments": [
+    {
+      "segmentId": "seg-001",
+      "originalText": "la redacción logística mostró un buen ajuste según el modelo",
+      "cleanedText": "La regresión logística mostró un buen ajuste según el modelo.",
+      "confidence": 0.91,
+      "wpm": 150.0,
+      "anomalous": false,
+      "aiSuggested": true,
+      "editedByHuman": false,
+      "modificationsLog": [
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "punctuation",
+          "before": "la redacción logística mostró un buen ajuste según el modelo",
+          "after": "La redacción logística mostró un buen ajuste según el modelo."
+        },
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "glossary",
+          "before": "redacción logística",
+          "after": "regresión logística"
+        }
+      ]
+    },
+    {
+      "segmentId": "seg-002",
+      "originalText": "el paciente juan perez fue atendido en el hospital central el 12/05/2023",
+      "cleanedText": "El paciente [NOMBRE] fue atendido en el [HOSPITAL] el [FECHA].",
+      "confidence": 0.78,
+      "wpm": 120.0,
+      "anomalous": false,
+      "aiSuggested": true,
+      "editedByHuman": false,
+      "modificationsLog": [
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "punctuation",
+          "before": "el paciente juan perez fue atendido en el hospital central el 12/05/2023",
+          "after": "El paciente juan perez fue atendido en el hospital central el 12/05/2023."
+        },
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "ner",
+          "before": "<redactado>",
+          "after": "[NOMBRE]"
+        },
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "ner",
+          "before": "<redactado>",
+          "after": "[HOSPITAL]"
+        },
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "ner",
+          "before": "<redactado>",
+          "after": "[FECHA]"
+        }
+      ]
+    },
+    {
+      "segmentId": "seg-003",
+      "originalText": "esto es una prueba de habla muy rapida con muchas palabras seguidas sin pausas",
+      "cleanedText": "Esto es una prueba de habla muy rápida con muchas palabras seguidas sin pausas.",
+      "confidence": null,
+      "wpm": 390.0,
+      "anomalous": true,
+      "aiSuggested": true,
+      "editedByHuman": false,
+      "modificationsLog": [
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "punctuation",
+          "before": "esto es una prueba de habla muy rapida con muchas palabras seguidas sin pausas",
+          "after": "Esto es una prueba de habla muy rápida con muchas palabras seguidas sin pausas."
+        }
+      ]
+    },
+    {
+      "segmentId": "seg-004",
+      "originalText": "despues de una larga pausa el participante continuo hablando",
+      "cleanedText": "Después de una larga pausa el participante continuó hablando.",
+      "confidence": 0.95,
+      "wpm": 180.0,
+      "anomalous": true,
+      "aiSuggested": true,
+      "editedByHuman": false,
+      "modificationsLog": [
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "punctuation",
+          "before": "despues de una larga pausa el participante continuo hablando",
+          "after": "Después de una larga pausa el participante continuó hablando."
+        }
+      ]
+    },
+    {
+      "segmentId": "seg-005",
+      "originalText": "silencio eh no se",
+      "cleanedText": "Silencio, eh, no sé.",
+      "confidence": 0.55,
+      "wpm": 24.0,
+      "anomalous": true,
+      "aiSuggested": true,
+      "editedByHuman": false,
+      "modificationsLog": [
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "punctuation",
+          "before": "silencio eh no se",
+          "after": "Silencio, eh, no sé."
+        }
+      ]
+    },
+    {
+      "segmentId": "seg-006",
+      "originalText": "muchas gracias por su tiempo doctor",
+      "cleanedText": "Muchas gracias por su tiempo, doctor.",
+      "confidence": 0.93,
+      "wpm": 30.0,
+      "anomalous": false,
+      "aiSuggested": true,
+      "editedByHuman": false,
+      "modificationsLog": [
+        {
+          "timestamp": "IGNORAR_EN_COMPARACION",
+          "type": "punctuation",
+          "before": "muchas gracias por su tiempo doctor",
+          "after": "Muchas gracias por su tiempo, doctor."
+        }
+      ]
+    }
+  ]
+}
