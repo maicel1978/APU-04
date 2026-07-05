@@ -3,6 +3,15 @@
  * assets/data/glossary.json, usando distancia de Levenshtein sobre n-gramas.
  * Ver docs/CONTRACTS.md §7 (formato de glossary.json). Las sustituciones se
  * registran en modificationsLog con type:"glossary" (texto real, no es PII).
+ *
+ * Extensión (2026-07): entradas con `exact: true` unifican variantes/sinónimos
+ * que el investigador declara explícitamente (p. ej. "IAM" -> "infarto agudo
+ * de miocardio"), donde la distancia de edición NO aplica (son palabras
+ * distintas, no errores de tecleo de la misma palabra). Coincidencia por
+ * palabra completa, insensible a mayúsculas, sin heurística de "parecido".
+ * Sigue siendo 100% determinista: el investigador declara la regla, la app
+ * la aplica siempre igual — coherente con "la IA sugiere, el investigador
+ * decide" (nunca se infieren sinónimos automáticamente).
  */
 
 // Umbral de distancia de edición: distancia ≤2 para términos de ≤12 caracteres,
@@ -56,16 +65,21 @@ function splitTrailingPunctuation(token) {
 
 /**
  * Aplica el glosario de términos de dominio bioestadístico/clínico sobre un
- * texto ya procesado por el Módulo A (text-diff.js), usando distancia de
- * edición (Levenshtein) sobre n-gramas de palabras consecutivas, con el
- * umbral definido en docs/CONTRACTS.md §2.
+ * texto ya procesado por el Módulo A (text-diff.js). Dos modos por entrada:
+ *  - Por defecto (sin `exact`): distancia de Levenshtein sobre n-gramas de
+ *    palabras consecutivas, con el umbral definido en docs/CONTRACTS.md §7
+ *    — pensado para errores de transcripción de la MISMA palabra/frase.
+ *  - `exact: true`: coincidencia exacta por palabra completa (insensible a
+ *    mayúsculas), sin heurística de distancia — pensado para unificar
+ *    variantes/sinónimos que el investigador declara ("IAM" -> "infarto
+ *    agudo de miocardio"), donde ambos términos son palabras distintas.
  *
  * Función pura: no lee `assets/data/glossary.json` (esa E/S es responsabilidad
  * de quien orquesta el pipeline, `clean-pipeline.js`), recibe las entradas ya
  * cargadas para mantenerse testeable sin sistema de archivos.
  *
  * @param {string} cleanedText - texto ya normalizado por el Módulo A.
- * @param {{ wrong: string, correct: string }[]} glossaryEntries
+ * @param {{ wrong: string, correct: string, exact?: boolean }[]} glossaryEntries
  * @returns {{ cleanedText: string, hits: { wrong: string, correct: string }[] }}
  */
 export function applyGlossary(cleanedText, glossaryEntries) {
@@ -82,7 +96,8 @@ export function applyGlossary(cleanedText, glossaryEntries) {
   for (const entry of glossaryEntries) {
     const wrongWords = entry.wrong.trim().split(/\s+/);
     const windowSize = wrongWords.length;
-    const threshold = distanceThreshold(entry.wrong);
+    const isExact = entry.exact === true;
+    const threshold = isExact ? 0 : distanceThreshold(entry.wrong);
 
     for (let start = 0; start <= tokens.length - windowSize; start += 1) {
       const windowTokens = tokens.slice(start, start + windowSize);
@@ -90,9 +105,13 @@ export function applyGlossary(cleanedText, glossaryEntries) {
       const windowCore = [...windowTokens.slice(0, windowSize - 1), last.core]
         .join(' ')
         .toLocaleLowerCase('es');
+      const wrongNormalized = entry.wrong.toLocaleLowerCase('es');
 
-      const distance = levenshteinDistance(windowCore, entry.wrong.toLocaleLowerCase('es'));
-      if (distance <= threshold) {
+      const matches = isExact
+        ? windowCore === wrongNormalized
+        : levenshteinDistance(windowCore, wrongNormalized) <= threshold;
+
+      if (matches) {
         const isSentenceStart = start === 0;
         const replacement = buildReplacement(entry.correct, last.trailing, isSentenceStart);
         tokens.splice(start, windowSize, ...replacement.split(' '));

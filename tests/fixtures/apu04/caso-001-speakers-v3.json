@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "3.0.0",
+  "unit": "APU-03",
+  "speakers": [
+    { "id": "spk-1", "label": "Entrevistador", "covariates": {} },
+    {
+      "id": "spk-2",
+      "label": "Paciente, principal",
+      "covariates": { "grupo_estudio": "Intervención", "sitio": "Hospital Central" }
+    }
+  ],
+  "segments": [
+    {
+      "id": "seg-001",
+      "start": 0.0,
+      "end": 4.0,
+      "text": "la redacción logística mostró un buen ajuste según el modelo",
+      "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
+      "edited": false
+    },
+    {
+      "id": "seg-002",
+      "start": 4.0,
+      "end": 9.0,
+      "text": "el paciente juan perez fue atendido en el hospital central el 12/05/2023",
+      "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
+      "edited": false
+    },
+    {
+      "id": "seg-003",
+      "start": 9.0,
+      "end": 11.0,
+      "text": "esto es una prueba de habla muy rapida con muchas palabras seguidas sin pausas",
+      "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
+      "edited": false
+    },
+    {
+      "id": "seg-004",
+      "start": 17.0,
+      "end": 20.0,
+      "text": "despues de una larga pausa el participante continuo hablando",
+      "speakerId": "spk-1",
+      "speaker": "Entrevistador",
+      "edited": false
+    },
+    {
+      "id": "seg-005",
+      "start": 20.0,
+      "end": 30.0,
+      "text": "silencio eh no se",
+      "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
+      "edited": false
+    },
+    {
+      "id": "seg-006",
+      "start": 30.5,
+      "end": 34.5,
+      "text": "muchas gracias por su tiempo doctor",
+      "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
+      "edited": false
+    }
+  ],
+  "covariateProject": {
+    "projectId": "VAROPS-001",
+    "projectName": "Estudio de ansiedad 2026"
+  },
+  "covariateSchema": [
+    { "key": "grupo_estudio", "type": "Nominal Politómica" },
+    { "key": "sitio", "type": "Nominal Politómica" }
+  ]
+}

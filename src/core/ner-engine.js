@@ -69,10 +69,19 @@ export function applyNerMasking(cleanedText, nerPatterns) {
  * insensible a mayúsculas/minúsculas, respetando límites de palabra),
  * registrando cada coincidencia en `hits` con el valor real encontrado
  * (preservando su capitalización original en el texto, no la de la lista).
+ *
+ * BUGFIX (2026-07): antes se usaba `\b` (límite de palabra nativo de JS),
+ * que se basa en la clase `[A-Za-z0-9_]` y NO reconoce vocales acentuadas ni
+ * "ñ" como parte de una palabra. Eso hacía que nombres como "Álvarez",
+ * "José" o "Peña" (con tilde/ñ en el borde) no coincidieran nunca, así que
+ * el enmascarado fallaba en silencio para una parte real de los apellidos
+ * en español. Se reemplaza por límites explícitos basados en categorías
+ * Unicode (`\p{L}` letra, `\p{N}` número), que sí cubren el alfabeto
+ * español completo. Ver tests/apu04-glossary-ner.test.mjs.
  */
 function replaceCaseInsensitive(text, value, label, hits) {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`\\b${escaped}\\b`, 'gi');
+  const regex = new RegExp(`(?<![\\p{L}\\p{N}_])${escaped}(?![\\p{L}\\p{N}_])`, 'giu');
   return text.replace(regex, (match) => {
     hits.push({ label, placeholder: label, originalValue: match });
     return label;

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "4.0.0",
   "ecosystem": "APU",
   "unit": "APU-04",
   "stage": "ner-patterns",
@@ -8,8 +8,8 @@
     { "label": "[TELÉFONO]", "pattern": "\\b\\+?\\d{7,12}\\b" }
   ],
   "listMatchers": [
-    { "label": "[NOMBRE]", "source": "studio-consentimiento", "values": [] },
-    { "label": "[HOSPITAL]", "source": "covariates.site", "values": [] },
-    { "label": "[DIRECCIÓN]", "source": "manual", "values": [] }
+    { "label": "[NOMBRE]", "source": "manual-nombres", "values": [] },
+    { "label": "[HOSPITAL]", "source": "manual-hospitales", "values": [] },
+    { "label": "[DIRECCIÓN]", "source": "manual-direcciones", "values": [] }
   ]
 }

@@ -87,17 +87,11 @@ body {
   margin-bottom: var(--space-6);
 }
 
-.app-kicker {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-  background: var(--accent-soft);
-  padding: 0.2rem 0.55rem;
-  border-radius: 999px;
-  margin-bottom: var(--space-3);
+.app-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .app-title {
@@ -171,6 +165,13 @@ body {
   margin: 0 0 var(--space-2);
   font-size: 1.1rem;
   font-weight: 700;
+}
+
+.card h3 {
+  margin: var(--space-4) 0 var(--space-2);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text-muted);
 }
 
 .section-hint {
@@ -534,6 +535,11 @@ input:focus-visible {
 
 .download-title { font-weight: 600; font-size: 0.92rem; }
 
+.download-description {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
 .download-filename {
   font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
   font-size: 0.76rem;
@@ -542,6 +548,12 @@ input:focus-visible {
 
 .download-card.is-danger { border-color: var(--danger-border); background: var(--danger-bg); }
 .download-card.is-danger .download-filename { color: var(--danger); }
+
+.download-card.is-highlight {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  border-width: 2px;
+}
 
 .download-primary {
   display: flex;
@@ -572,6 +584,172 @@ input:focus-visible {
   color: var(--text-muted);
   font-size: 0.78rem;
 }
+
+/* ---------- Vista de Diálogo Continuo (guion/chat, Regla 4) ---------- */
+
+.dialogue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.dialogue-toolbar select,
+.dialogue-toolbar input[type="search"] {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.dialogue-toolbar input[type="search"] { flex: 1 1 220px; min-width: 180px; }
+
+.dialogue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dialogue-bubble {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+}
+
+.dialogue-bubble:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.dialogue-bubble[data-status="pending"][data-anomalous="true"] { border-left-color: var(--danger); }
+.dialogue-bubble[data-status="reviewed"] { border-left-color: var(--success); }
+
+.dialogue-bubble-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+
+.dialogue-speaker { font-size: 0.92rem; }
+.dialogue-time { font-size: 0.78rem; font-family: "SF Mono", "Cascadia Code", Consolas, monospace; }
+.dialogue-covariate { font-size: 0.78rem; }
+
+.anomaly-reason {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+}
+
+/* ---------- Panel de calidad (APU-04D) ---------- */
+
+.file-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.file-row-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  text-align: left;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  font: inherit;
+  color: var(--text);
+}
+
+.file-row-button:hover { border-color: var(--accent); background: var(--accent-soft); }
+
+.file-row-name { font-weight: 600; }
+.file-row-stats { color: var(--text-muted); font-size: 0.82rem; }
+
+/* ---------- Palabras/frases más repetidas (nube de términos) ---------- */
+
+.term-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+}
+
+.term-tag {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.2rem 0.6rem;
+  color: var(--text);
+}
+
+/* ---------- Toggle de privacidad (Regla 3) ---------- */
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+/* ---------- Diccionario de correcciones (glosario editable) ---------- */
+
+.glossary-list {
+  list-style: none;
+  margin: 0 0 var(--space-5);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.glossary-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+}
+
+.glossary-wrong { color: var(--text-muted); }
+.glossary-correct { font-weight: 600; }
+.glossary-row .btn { margin-left: auto; }
 
 /* ---------- Mensaje de respaldo si la aplicación no logra iniciar ---------- */
 /* Evita una página en blanco sin explicación

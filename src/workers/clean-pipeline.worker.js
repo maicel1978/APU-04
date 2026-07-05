@@ -1,7 +1,10 @@
 /**
+ * PRISMA+ v5.2 — Vanilla JS ES2022+ Modules
+ * Runtime: NO frameworks (R1)
  * Web Worker que ejecuta clean-pipeline.js sin bloquear la UI. Contrato de
  * mensajería: RUN_PIPELINE -> PIPELINE_RESULT | PIPELINE_ERROR (ver
  * tests/apu04-worker.test.mjs y src/ui/worker-client.js, que lo consume).
+ * `nerOptInActive` viaja en el payload (Regla 3: opt-in, off por defecto).
  */
 
 import { runCleanPipeline } from '../core/clean-pipeline.js';
@@ -14,7 +17,7 @@ import { runCleanPipeline } from '../core/clean-pipeline.js';
 // (ver createInlineWorkerUrl más abajo).
 
 self.onmessage = async (event) => {
-  const { type, canonicalInput, glossaryEntries, nerPatterns } = event.data ?? {};
+  const { type, canonicalInput, glossaryEntries, nerPatterns, nerOptInActive } = event.data ?? {};
 
   if (type !== 'RUN_PIPELINE') {
     self.postMessage({
@@ -25,14 +28,25 @@ self.onmessage = async (event) => {
   }
 
   try {
-    const { cleanJson, piiBuffer } = await runCleanPipeline(canonicalInput, glossaryEntries, nerPatterns);
+    const { cleanJson, piiBuffer } = await runCleanPipeline(
+      canonicalInput,
+      glossaryEntries,
+      nerPatterns,
+      Boolean(nerOptInActive),
+    );
     self.postMessage({ type: 'PIPELINE_RESULT', cleanJson, piiBuffer });
   } catch (error) {
-    // Mensaje claro y no técnico para el usuario final.
+    // BUGFIX (2026-07): antes siempre se enviaba un mensaje genérico y solo
+    // el detalle real viajaba en `detail`, que worker-client.js nunca leía;
+    // el usuario final no tenía forma de saber qué falló. Los mensajes que
+    // lanza el pipeline (schema-validator.js, ingest-adapter.js, etc.) ya
+    // están redactados en español y sin datos sensibles ni trazas técnicas
+    // (ver docs/DECISIONS.md), así que son seguros de mostrar directamente.
+    const detail = error instanceof Error ? error.message : String(error);
     self.postMessage({
       type: 'PIPELINE_ERROR',
-      message: 'No se pudo procesar la entrevista. Verifique el archivo de entrada e inténtelo de nuevo.',
-      detail: error instanceof Error ? error.message : String(error),
+      message: detail || 'No se pudo procesar la entrevista. Verifique el archivo de entrada e inténtelo de nuevo.',
+      detail,
     });
   }
 };

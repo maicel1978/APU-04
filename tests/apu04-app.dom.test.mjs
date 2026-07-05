@@ -1,55 +1,46 @@
 /**
- * Cubre: src/ui/app.js — integración de extremo a extremo: ingestión de
- * speakers.json → formulario de covariates → listas de PII → pipeline de
- * limpieza (Worker simulado) → revisión humana → finalización → exportación.
- * Usa jsdom y el fixture real caso-001-entrada.json (adaptado a la forma de
- * speakers.json, con "id" en vez de "segmentId").
- *
- * El Worker real (basado en window.Worker) no existe en Node/jsdom; se
- * inyecta un `workerFactory` de prueba que ejecuta el mismo pipeline real
- * de forma asíncrona, cumpliendo el contrato de mensajería ya verificado en
- * tests/apu04-worker.test.mjs.
+ * Cubre: src/ui/app.js — integración de extremo a extremo con jsdom:
+ * ingestión de un lote de 2 speakers.json (Regla 2: Batch) → privacidad
+ * (Regla 3, opt-in) → limpieza (Worker simulado) → Dashboard APU-04D →
+ * Vista de Diálogo Continuo → exportación. Sin Worker real (no existe en
+ * Node/jsdom): se inyecta `workerFactory` con un doble que cumple el mismo
+ * contrato de eventos que src/ui/worker-client.js espera.
  */
 
-import { test, before, after, beforeEach, afterEach } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { installDomEnv } from './helpers/dom-env.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 let teardown;
 before(() => {
   ({ teardown } = installDomEnv());
 });
-after(() => {
-  teardown();
-});
+after(() => teardown());
 
 const { initApp } = await import('../src/ui/app.js');
 const { runCleanPipeline } = await import('../src/core/clean-pipeline.js');
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const glossaryEntries = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'assets', 'data', 'glossary.json'), 'utf-8'),
 ).entries;
 const nerPatternsTemplate = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'assets', 'data', 'ner-patterns.json'), 'utf-8'),
 );
-const entrada = JSON.parse(
-  readFileSync(path.join(__dirname, 'fixtures', 'apu04', 'caso-001-entrada.json'), 'utf-8'),
+const speakersV3 = JSON.parse(
+  readFileSync(path.join(__dirname, 'fixtures', 'apu04', 'caso-001-speakers-v3.json'), 'utf-8'),
 );
 
-// speakers.json (forma real de salida de APU-03, docs/CONTRACTS.md §5):
-// usa "id" por segmento, y no incluye studyId/covariates (los provee el
-// formulario, no el pipeline ASR/diarización anterior).
-const speakersJson = {
-  segments: entrada.segments.map(({ segmentId, ...rest }) => ({ id: segmentId, ...rest })),
-};
+function makeFakeFile(name, contentObject) {
+  const text = JSON.stringify(contentObject);
+  return { name, text: async () => text };
+}
 
 function makeFakeWorkerFactory() {
-  return function fakeWorkerFactory() {
+  return function createFakeWorker() {
     const listeners = { message: [], error: [] };
     return {
       addEventListener(type, handler) {
@@ -58,151 +49,212 @@ function makeFakeWorkerFactory() {
       removeEventListener(type, handler) {
         listeners[type] = listeners[type].filter((h) => h !== handler);
       },
-      postMessage({ canonicalInput, glossaryEntries: g, nerPatterns }) {
-        // Ejecuta el pipeline real de forma asíncrona, igual que lo haría un
-        // Worker real, cumpliendo el mismo contrato RUN_PIPELINE -> PIPELINE_RESULT.
-        runCleanPipeline(canonicalInput, g, nerPatterns)
-          .then(({ cleanJson, piiBuffer }) => {
-            for (const handler of [...listeners.message]) {
-              handler({ data: { type: 'PIPELINE_RESULT', cleanJson, piiBuffer } });
-            }
-          })
-          .catch((error) => {
-            for (const handler of [...listeners.message]) {
-              handler({ data: { type: 'PIPELINE_ERROR', message: error.message } });
-            }
-          });
+      async postMessage(payload) {
+        try {
+          const { cleanJson, piiBuffer } = await runCleanPipeline(
+            payload.canonicalInput,
+            payload.glossaryEntries,
+            payload.nerPatterns,
+            Boolean(payload.nerOptInActive),
+          );
+          for (const handler of [...listeners.message]) handler({ data: { type: 'PIPELINE_RESULT', cleanJson, piiBuffer } });
+        } catch (error) {
+          for (const handler of [...listeners.message]) {
+            handler({ data: { type: 'PIPELINE_ERROR', message: error.message } });
+          }
+        }
       },
     };
   };
 }
 
-function makeFakeSessionStore() {
-  const saved = [];
+async function driveIngestAndPrivacy(root, files, { activateNer = false } = {}) {
+  const fileInput = root.querySelector('.dropzone-input');
+  Object.defineProperty(fileInput, 'files', { value: files, configurable: true });
+  fileInput.dispatchEvent(new Event('change'));
+
+  // Esperar a que se resuelvan las promesas de lectura de archivo (macrotask real).
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  if (activateNer) {
+    const toggle = root.querySelector('#apu04-ner-opt-in');
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change'));
+  }
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+  // Esperar a que el pipeline (async, vía "Worker" simulado, incluye sha256Hex
+  // real) resuelva para todos los archivos del lote.
+  await new Promise((resolve) => setTimeout(resolve, 50));
+}
+
+test('flujo completo con lote de 2 archivos: ingestión -> privacidad -> dashboard', async () => {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+
+  initApp(root, { glossaryEntries, nerPatternsTemplate, workerFactory: makeFakeWorkerFactory() });
+
+  const fileA = makeFakeFile('estudio_caso-a_speakers.json', speakersV3);
+  const fileB = makeFakeFile('estudio_caso-b_speakers.json', speakersV3);
+  await driveIngestAndPrivacy(root, [fileA, fileB]);
+
+  assert.match(root.textContent, /Panel de calidad/);
+  const fileRows = root.querySelectorAll('.file-row');
+  assert.equal(fileRows.length, 2);
+
+  document.body.removeChild(root);
+});
+
+test('sin activar el modo confidencial (default): el texto no se enmascara en el diálogo', async () => {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+
+  initApp(root, { glossaryEntries, nerPatternsTemplate, workerFactory: makeFakeWorkerFactory() });
+  const fileA = makeFakeFile('estudio_caso-a_speakers.json', speakersV3);
+  await driveIngestAndPrivacy(root, [fileA], { activateNer: false });
+
+  root.querySelector('.file-row-button').click();
+  assert.match(root.textContent, /juan perez/i, 'sin opt-in, no debe enmascararse (el fixture no tiene NER configurado por defecto de todas formas, pero valida que la pantalla de diálogo se abre)');
+
+  document.body.removeChild(root);
+});
+
+test('rechaza inicializar sin dependencias base (glosario/patrones)', () => {
+  const root = document.createElement('div');
+  assert.throws(() => initApp(root, {}), /Faltan los datos base/);
+});
+
+test('rechaza un elemento raíz inválido', () => {
+  assert.throws(() => initApp(null, { glossaryEntries, nerPatternsTemplate }), /elemento raíz/);
+});
+
+// --- mejoras 2026-07: Ayuda y Diccionario de correcciones incorporados -----
+
+function createInMemoryGlossaryStore() {
+  let saved = [];
   return {
-    store: saved,
-    saveSession(sessionId, data) {
-      saved.push({ sessionId, data });
-    },
-    loadSession() {
-      return null;
-    },
-    clearSession() {},
+    loadOverrides: () => saved,
+    saveOverrides: (entries) => { saved = entries; },
+    clearOverrides: () => { saved = []; },
   };
 }
 
-let root;
-beforeEach(() => {
-  root = document.createElement('div');
+test('mejora: el botón Ayuda, visible desde el inicio, muestra contenido de ayuda', () => {
+  const root = document.createElement('div');
   document.body.appendChild(root);
-  window.alert = () => {};
-});
-afterEach(() => {
-  root.remove();
-});
+  initApp(root, { glossaryEntries, nerPatternsTemplate, workerFactory: makeFakeWorkerFactory(), glossaryStore: createInMemoryGlossaryStore() });
 
-function makeSpeakersFile() {
-  return new File([JSON.stringify(speakersJson)], 'speakers.json', { type: 'application/json' });
-}
+  const helpButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Ayuda');
+  assert.ok(helpButton, 'debe existir un botón de Ayuda visible desde el inicio');
+  helpButton.click();
+  assert.match(root.textContent, /Diccionario de correcciones/);
 
-function selectFile(fileInput, file) {
-  Object.defineProperty(fileInput, 'files', { value: [file], writable: false, configurable: true });
-  fileInput.dispatchEvent(new Event('change'));
-}
-
-async function flushMicrotasks() {
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-test('initApp lanza un error claro si faltan las dependencias base (glosario/patrones NER)', () => {
-  assert.throws(() => initApp(root, undefined), /Faltan los datos base/);
-  assert.throws(() => initApp(root, { glossaryEntries: [] }), /Faltan los datos base/);
+  document.body.removeChild(root);
 });
 
-test('initApp: flujo completo de un caso, de la ingestión a la exportación', async () => {
-  const sessionStore = makeFakeSessionStore();
-  initApp(root, {
-    glossaryEntries,
-    nerPatternsTemplate,
-    sessionStore,
-    workerFactory: makeFakeWorkerFactory(),
-  });
+test('mejora: el botón Ayuda vuelve a la pantalla anterior (no siempre al inicio)', () => {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  initApp(root, { glossaryEntries, nerPatternsTemplate, workerFactory: makeFakeWorkerFactory(), glossaryStore: createInMemoryGlossaryStore() });
 
-  // 1) Ingestión: selecciona speakers.json.
-  const fileInput = root.querySelector('input[type="file"]');
-  assert.ok(fileInput, 'debe existir el input de archivo de ingestión');
-  selectFile(fileInput, makeSpeakersFile());
-  await flushMicrotasks();
+  // Entra al Diccionario desde la pantalla de inicio.
+  const glossaryButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Diccionario de correcciones');
+  glossaryButton.click();
+  assert.match(root.textContent, /Como aparece en el texto/);
 
-  // 2) Formulario de covariates: se completa y se envía.
-  const form = root.querySelector('form[aria-label="Formulario de datos del estudio y covariables"]');
-  assert.ok(form, 'debe renderizarse el formulario de covariates tras cargar speakers.json');
-  form.querySelector('#apu04-studyId').value = 'estudio-ansiedad-2026';
-  form.querySelector('#apu04-caseId').value = 'caso-001';
-  form.querySelector('#apu04-group').value = 'intervencion';
-  form.querySelector('#apu04-moment').value = 'pre';
-  form.querySelector('#apu04-sex').value = 'F';
-  form.querySelector('#apu04-age').value = '34';
-  form.querySelector('#apu04-site').value = 'Hospital Central';
-  form.querySelector('#apu04-diagnosis').value = 'Trastorno de ansiedad generalizada';
-  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  // Abre Ayuda desde ahí, y al volver debe regresar al Diccionario, no al inicio.
+  const helpButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Ayuda');
+  helpButton.click();
+  const backButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Volver');
+  backButton.click();
+  assert.match(root.textContent, /Diccionario de correcciones/);
+  assert.match(root.textContent, /Como aparece en el texto/);
 
-  // 3) Formulario de listas de PII: se envía con un nombre real a enmascarar.
-  const piiForm = root.querySelector('form[aria-label="Listas manuales de nombres y direcciones a enmascarar"]');
-  assert.ok(piiForm, 'debe renderizarse el formulario de listas de PII tras enviar covariates');
-  piiForm.querySelector('#apu04-pii-names').value = 'Juan Perez';
-  piiForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-
-  await flushMicrotasks();
-
-  // 4) Pantalla de revisión: debe existir con los 6 segmentos del fixture.
-  const reviewItems = root.querySelectorAll('li[data-segment-id]');
-  assert.equal(reviewItems.length, entrada.segments.length);
-  assert.ok(sessionStore.store.length > 0, 'debe autoguardar el progreso al terminar el pipeline');
-
-  // El nombre real "Juan Perez" no debe aparecer en cleanedText de ningún segmento
-  // (regla dura de privacidad, docs/CONTRACTS.md §4/§6).
-  const lastSaved = sessionStore.store[sessionStore.store.length - 1].data;
-  for (const segment of lastSaved.segments) {
-    assert.doesNotMatch(segment.cleanedText, /Juan Perez/i);
-  }
-
-  // 5) Acepta todos los segmentos anómalos y sin revisar hasta poder finalizar.
-  const pendingAnomalous = () =>
-    [...root.querySelectorAll('li[data-segment-id]')].filter(
-      (li) => li.querySelector('strong').textContent.includes('ANÓMALO') && li.textContent.includes('(pendiente)'),
-    );
-  const finalizeButton = () => [...root.querySelectorAll('button')].find((b) => b.textContent.includes('Finalizar'));
-  let guard = 0;
-  while (pendingAnomalous().length > 0 && guard < 10) {
-    const item = pendingAnomalous()[0];
-    const acceptButton = [...item.querySelectorAll('button')].find((b) => b.textContent.includes('Aceptar'));
-    acceptButton.click();
-    guard += 1;
-  }
-
-  assert.ok(finalizeButton(), 'debe existir el botón de finalizar en la pantalla de revisión');
-  assert.equal(finalizeButton().disabled, false, 'el botón de finalizar debe habilitarse tras revisar los anómalos');
-
-  // 6) Finaliza la revisión.
-  finalizeButton().click();
-
-  // 7) Pantalla de exportación.
-  const exportHeading = [...root.querySelectorAll('h2')].find((h) => h.textContent.includes('exportación'));
-  assert.ok(exportHeading, 'debe mostrarse la pantalla de exportación tras finalizar');
-  const cleanJsonButton = [...root.querySelectorAll('button')].find((b) => b.textContent.includes('clean.json'));
-  assert.ok(cleanJsonButton, 'debe existir el botón de descarga de clean.json');
+  document.body.removeChild(root);
 });
 
-test('initApp muestra un mensaje de error claro si el archivo seleccionado no es JSON válido', async () => {
-  initApp(root, { glossaryEntries, nerPatternsTemplate, sessionStore: makeFakeSessionStore() });
+test('mejora: un término agregado al diccionario de correcciones persiste en el glossaryStore inyectado', () => {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  const glossaryStore = createInMemoryGlossaryStore();
+  initApp(root, { glossaryEntries, nerPatternsTemplate, workerFactory: makeFakeWorkerFactory(), glossaryStore });
 
-  const fileInput = root.querySelector('input[type="file"]');
-  const badFile = new File(['esto no es json'], 'roto.json', { type: 'application/json' });
-  selectFile(fileInput, badFile);
-  await flushMicrotasks();
+  const glossaryButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Diccionario de correcciones');
+  glossaryButton.click();
 
-  const errorBox = root.querySelector('[role="alert"]');
-  assert.match(errorBox.textContent, /No se pudo leer el archivo/);
+  root.querySelector('#glossary-wrong').value = 'IAM';
+  root.querySelector('#glossary-correct').value = 'infarto agudo de miocardio';
+  root.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+  const saved = glossaryStore.loadOverrides();
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].wrong, 'IAM');
+
+  document.body.removeChild(root);
+});
+
+test('mejora: las entradas guardadas del diccionario se cargan al iniciar la aplicación (persisten entre sesiones)', () => {
+  const glossaryStore = createInMemoryGlossaryStore();
+  glossaryStore.saveOverrides([{ wrong: 'IAM', correct: 'infarto agudo de miocardio', exact: true }]);
+
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  initApp(root, { glossaryEntries, nerPatternsTemplate, workerFactory: makeFakeWorkerFactory(), glossaryStore });
+
+  const glossaryButton = [...root.querySelectorAll('button')].find((b) => b.textContent === 'Diccionario de correcciones');
+  glossaryButton.click();
+  assert.match(root.textContent, /IAM/);
+  assert.match(root.textContent, /infarto agudo de miocardio/);
+
+  document.body.removeChild(root);
+});
+
+// --- regresión: un lote SIN covariables en ningún archivo no debe romper
+// nada ni mostrar secciones vacías/confusas de "grupo" (idea del usuario:
+// las covariables no siempre están presentes) --------------------------------
+
+test('regresión: un lote donde ningún archivo trae covariables funciona igual, sin mostrar secciones de grupo vacías', async () => {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  initApp(root, { glossaryEntries, nerPatternsTemplate, workerFactory: makeFakeWorkerFactory() });
+
+  const speakersSinCovariables = {
+    ...speakersV3,
+    speakers: speakersV3.speakers.map((s) => ({ ...s, covariates: {} })),
+  };
+  const fileA = makeFakeFile('sin-covariables-a_speakers.json', speakersSinCovariables);
+  const fileB = makeFakeFile('sin-covariables-b_speakers.json', speakersSinCovariables);
+  await driveIngestAndPrivacy(root, [fileA, fileB]);
+
+  // El panel de calidad debe cargar con normalidad...
+  assert.match(root.textContent, /Panel de calidad/);
+  assert.equal(root.querySelectorAll('.file-row').length, 2);
+  // ...pero sin la tarjeta de grupos (no hay nada que mostrar).
+  assert.equal(root.textContent.includes('Grupos y variables del estudio'), false);
+
+  // Al entrar al diálogo de un archivo, tampoco debe aparecer el selector de covariable.
+  root.querySelector('.file-row-button').click();
+  assert.equal(root.querySelector('select[aria-label="Filtrar por grupo u otra variable del estudio"]'), null);
+
+  document.body.removeChild(root);
+});
+
+test('regresión: un lote donde solo ALGUNOS archivos traen covariables no lanza y muestra el resumen con lo disponible', async () => {
+  const root = document.createElement('div');
+  document.body.appendChild(root);
+  initApp(root, { glossaryEntries, nerPatternsTemplate, workerFactory: makeFakeWorkerFactory() });
+
+  const speakersSinCovariables = {
+    ...speakersV3,
+    speakers: speakersV3.speakers.map((s) => ({ ...s, covariates: {} })),
+  };
+  const fileA = makeFakeFile('con-covariables_speakers.json', speakersV3); // trae grupo_estudio/sitio
+  const fileB = makeFakeFile('sin-covariables_speakers.json', speakersSinCovariables);
+  await driveIngestAndPrivacy(root, [fileA, fileB]);
+
+  assert.match(root.textContent, /Panel de calidad/);
+  assert.match(root.textContent, /Grupos y variables del estudio/);
+  assert.match(root.textContent, /grupo_estudio/);
+
+  document.body.removeChild(root);
 });

@@ -16,8 +16,8 @@ import { applyPunctuationRules } from '../src/core/text-diff.js';
 import { computeTelemetry } from '../src/core/telemetry.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const entradaPath = path.join(__dirname, 'fixtures', 'apu04', 'caso-001-entrada.json');
-const esperadoPath = path.join(__dirname, 'fixtures', 'apu04', 'caso-001-clean-esperado.json');
+const entradaPath = path.join(__dirname, 'fixtures', 'apu04', 'caso-001-canonico.json');
+const esperadoPath = path.join(__dirname, 'fixtures', 'apu04', 'caso-001-canonico-esperado-legacy.json');
 const entrada = JSON.parse(readFileSync(entradaPath, 'utf-8'));
 const esperado = JSON.parse(readFileSync(esperadoPath, 'utf-8'));
 
@@ -142,4 +142,43 @@ test('duration=0 se maneja sin dividir por cero: anomalous=true con nota', () =>
 test('sin segmento anterior (primer segmento), no se evalúa pausa larga', () => {
   const result = computeTelemetry({ cleanedText: 'Hola mundo, esta es una prueba normal.', start: 0, end: 3 }, null);
   assert.equal(result.anomalous, false);
+});
+
+// --- reason/anomalyReason (mejora 2026-07: motivo legible de anomalía) ------
+
+test('reason describe ritmo alto cuando wpm > 220', () => {
+  const result = computeTelemetry({ cleanedText: Array(30).fill('palabra').join(' '), start: 0, end: 2 }, null);
+  assert.match(result.reason, /ritmo de habla inusualmente alto/i);
+});
+
+test('reason describe ritmo bajo cuando wpm < 40', () => {
+  const result = computeTelemetry({ cleanedText: 'una palabra', start: 0, end: 10 }, null);
+  assert.match(result.reason, /ritmo de habla inusualmente bajo/i);
+});
+
+test('reason describe pausa larga cuando aplica, y puede combinarse con otra causa', () => {
+  const result = computeTelemetry({ cleanedText: 'una palabra', start: 20, end: 30 }, 10);
+  assert.match(result.reason, /pausa larga/i);
+});
+
+test('reason es null cuando el segmento no es anómalo', () => {
+  const result = computeTelemetry({ cleanedText: 'Hola mundo, esta es una prueba normal.', start: 0, end: 3 }, null);
+  assert.equal(result.anomalous, false);
+  assert.equal(result.reason, null);
+});
+
+test('enrichLastSegmentReason amplía el motivo solo si duration<=0 Y es el último segmento', async () => {
+  const { enrichLastSegmentReason } = await import('../src/core/telemetry.js');
+  const base = 'El inicio y el final de este segmento son iguales, así que no se pudo calcular el ritmo de habla.';
+
+  assert.match(enrichLastSegmentReason(base, 0, true), /último segmento/i);
+  assert.equal(enrichLastSegmentReason(base, 0, false), base, 'no debe ampliar si no es el último segmento');
+  assert.equal(enrichLastSegmentReason('otro motivo', 5, true), 'otro motivo', 'no debe ampliar si duration > 0');
+});
+
+test('mejora: el mensaje de duración inválida está en lenguaje simple, sin notación técnica', () => {
+  const result = computeTelemetry({ cleanedText: 'algo', start: 5.0, end: 5.0 }, null);
+  assert.equal(result.reason.includes('<='), false, 'no debe usar notación matemática como "<="');
+  assert.equal(/\bwpm\b/i.test(result.reason), false, 'no debe usar la abreviatura técnica "wpm"');
+  assert.match(result.reason, /no se pudo calcular/i);
 });

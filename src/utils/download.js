@@ -1,7 +1,9 @@
 /**
+ * PRISMA+ v5.2 — Vanilla JS ES2022+ Modules
+ * Runtime: NO frameworks (R1)
  * Descarga de archivos en el navegador (Blob + enlace temporal, sin
  * librerías externas, sin red). Nombres de archivo según la convención
- * `[study]_[case]_[stage].[ext]` (docs/CONTRACTS.md §9).
+ * `[base]_[stage].[ext]` (docs/CONTRACTS.md §12).
  */
 
 /**
@@ -65,21 +67,19 @@ export function downloadCsvFile(filename, csvContent) {
 }
 
 /**
- * Construye el nombre de archivo canónico `[study]_[case]_[stage].[ext]`
- * (docs/CONTRACTS.md §3), saneando `studyId`/`caseId` para evitar
- * caracteres inválidos en nombres de archivo (espacios y símbolos no
- * alfanuméricos se convierten a guion).
+ * Construye el nombre de archivo canónico `[base]_[stage].[ext]`
+ * (docs/CONTRACTS.md §12), donde `base` ya viene saneado (ver
+ * src/core/batch-controller.js#buildFileBase, derivado del nombre del
+ * speakers.json cargado).
  *
- * @param {string|null} studyId
- * @param {string|null} caseId
- * @param {string} stage - p.ej. "clean", "pii-buffer.local", "quality-report".
- * @param {string} ext - p.ej. "json", "csv", "txt".
+ * @param {string} base - nombre base ya saneado del archivo de origen.
+ * @param {string} stage - p.ej. "cleaned", "quality_report", "edit_log", "pii-buffer.local".
+ * @param {string} ext - p.ej. "json", "csv".
  * @returns {string}
  */
-export function buildFileName(studyId, caseId, stage, ext) {
-  const safeStudy = sanitizeSegment(studyId, 'estudio');
-  const safeCase = sanitizeSegment(caseId, 'caso');
-  return `${safeStudy}_${safeCase}_${stage}.${ext}`;
+export function buildFileName(base, stage, ext) {
+  const safeBase = sanitizeSegment(base, 'archivo');
+  return `${safeBase}_${stage}.${ext}`;
 }
 
 function sanitizeSegment(value, fallback) {

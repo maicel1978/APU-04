@@ -15,10 +15,22 @@ const template = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'assets', 'data', 'ner-patterns.json'), 'utf-8'),
 );
 
-test('hydrateNerPatterns completa listMatchers de covariates.site con el sitio del caso', () => {
-  const result = hydrateNerPatterns(template, { site: 'Hospital Central' });
-  const siteMatcher = result.listMatchers.find((m) => m.source === 'covariates.site');
-  assert.deepEqual(siteMatcher.values, ['Hospital Central']);
+test('hydrateNerPatterns completa la lista manual de nombres sin inferirla', () => {
+  const result = hydrateNerPatterns(template, { manualNames: ['Juan Pérez', 'juan pérez', 'Ana Ruiz'] });
+  const nameMatcher = result.listMatchers.find((m) => m.source === 'manual-nombres');
+  assert.deepEqual(nameMatcher.values, ['Juan Pérez', 'Ana Ruiz']);
+});
+
+test('hydrateNerPatterns completa la lista manual de hospitales/sitios', () => {
+  const result = hydrateNerPatterns(template, { manualHospitals: ['Hospital Central'] });
+  const hospitalMatcher = result.listMatchers.find((m) => m.source === 'manual-hospitales');
+  assert.deepEqual(hospitalMatcher.values, ['Hospital Central']);
+});
+
+test('hydrateNerPatterns completa la lista manual de direcciones', () => {
+  const result = hydrateNerPatterns(template, { manualAddresses: ['Calle Falsa 123'] });
+  const addressMatcher = result.listMatchers.find((m) => m.source === 'manual-direcciones');
+  assert.deepEqual(addressMatcher.values, ['Calle Falsa 123']);
 });
 
 test('hydrateNerPatterns deja listMatchers vacíos si no se provee ningún valor en runtime', () => {
@@ -28,21 +40,9 @@ test('hydrateNerPatterns deja listMatchers vacíos si no se provee ningún valor
   }
 });
 
-test('hydrateNerPatterns completa la lista manual de nombres (studio-consentimiento) sin inferirla', () => {
-  const result = hydrateNerPatterns(template, { manualNames: ['Juan Pérez', 'juan pérez', 'Ana Ruiz'] });
-  const nameMatcher = result.listMatchers.find((m) => m.source === 'studio-consentimiento');
-  assert.deepEqual(nameMatcher.values, ['Juan Pérez', 'Ana Ruiz']);
-});
-
-test('hydrateNerPatterns completa la lista manual de direcciones (source: manual)', () => {
-  const result = hydrateNerPatterns(template, { manualAddresses: ['Calle Falsa 123'] });
-  const addressMatcher = result.listMatchers.find((m) => m.source === 'manual');
-  assert.deepEqual(addressMatcher.values, ['Calle Falsa 123']);
-});
-
 test('hydrateNerPatterns no muta la plantilla original', () => {
   const before = JSON.stringify(template);
-  hydrateNerPatterns(template, { site: 'X', manualNames: ['Y'] });
+  hydrateNerPatterns(template, { manualNames: ['Y'] });
   assert.equal(JSON.stringify(template), before);
 });
 

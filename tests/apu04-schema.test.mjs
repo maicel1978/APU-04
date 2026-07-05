@@ -12,130 +12,134 @@ import { validateCleanInput } from '../src/core/schema-validator.js';
 import { adaptSpeakersOutput } from '../src/core/ingest-adapter.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const fixturePath = path.join(__dirname, 'fixtures', 'apu04', 'caso-001-entrada.json');
-const fixtureEntrada = JSON.parse(readFileSync(fixturePath, 'utf-8'));
+const canonicoPath = path.join(__dirname, 'fixtures', 'apu04', 'caso-001-canonico.json');
+const fixtureCanonico = JSON.parse(readFileSync(canonicoPath, 'utf-8'));
+const speakersV3Path = path.join(__dirname, 'fixtures', 'apu04', 'caso-001-speakers-v3.json');
+const fixtureSpeakersV3 = JSON.parse(readFileSync(speakersV3Path, 'utf-8'));
 
-// --- schema-validator.js ---------------------------------------------------
+// --- schema-validator.js -----------------------------------------------------
 
-test('acepta el fixture canónico caso-001-entrada.json sin errores', () => {
-  const result = validateCleanInput(fixtureEntrada);
+test('acepta el fixture canónico caso-001-canonico.json sin errores', () => {
+  const result = validateCleanInput(fixtureCanonico);
   assert.equal(result.valid, true, `Errores inesperados: ${JSON.stringify(result.errors)}`);
   assert.deepEqual(result.errors, []);
 });
 
 test('rechaza un JSON de entrada sin segments[]', () => {
-  const input = structuredClone(fixtureEntrada);
+  const input = structuredClone(fixtureCanonico);
   delete input.segments;
   const result = validateCleanInput(input);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.includes('segments')));
 });
 
-test('rechaza un segmento con end <= start', () => {
-  const input = structuredClone(fixtureEntrada);
-  input.segments[0].end = input.segments[0].start; // end == start, inválido
+test('BUGFIX regresión: acepta un segmento con end === start (duración cero, ruido normal de ASR) sin bloquear el archivo completo', () => {
+  // Antes: un solo segmento con timestamps iguales (común en ASR/diarización,
+  // p. ej. "seg-048" reportado por un usuario real) tiraba TODO el archivo con
+  // un error fatal, aunque telemetry.js ya maneja este caso de forma
+  // defensiva marcando solo ese segmento como anómalo (docs/DECISIONS.md).
+  const input = structuredClone(fixtureCanonico);
+  input.segments[0].end = input.segments[0].start;
   const result = validateCleanInput(input);
-  assert.equal(result.valid, false);
-  assert.ok(result.errors.some((e) => e.includes('debe ser mayor que')));
+  assert.equal(result.valid, true, `No debería bloquear el archivo: ${JSON.stringify(result.errors)}`);
 });
 
-test('rechaza covariates con una clave faltante (omitida, no null)', () => {
-  const input = structuredClone(fixtureEntrada);
-  delete input.covariates.age; // omitir la clave, no poner null
+test('rechaza un segmento con end < start (datos incoherentes, imposibles de interpretar)', () => {
+  const input = structuredClone(fixtureCanonico);
+  input.segments[0].end = input.segments[0].start - 1;
   const result = validateCleanInput(input);
   assert.equal(result.valid, false);
-  assert.ok(result.errors.some((e) => e.includes('covariates.age')));
+  assert.ok(result.errors.some((e) => e.includes('no puede ser menor que')));
 });
 
-test('acepta covariates con null explícito en una clave (no es lo mismo que omitirla)', () => {
-  const input = structuredClone(fixtureEntrada);
-  input.covariates.diagnosis = null; // null explícito: válido según API-CONTRACTS.md §3
+test('acepta covariateProject/covariateSchema en null (passthrough agnóstico, Regla 1)', () => {
+  const input = structuredClone(fixtureCanonico);
+  input.covariateProject = null;
+  input.covariateSchema = null;
+  const result = validateCleanInput(input);
+  assert.equal(result.valid, true, `Errores inesperados: ${JSON.stringify(result.errors)}`);
+});
+
+test('acepta speakers[].covariates vacío ({}) sin exigir claves fijas (Regla 1)', () => {
+  const input = structuredClone(fixtureCanonico);
+  input.speakers[0].covariates = {};
   const result = validateCleanInput(input);
   assert.equal(result.valid, true, `Errores inesperados: ${JSON.stringify(result.errors)}`);
 });
 
 test('rechaza segmentId duplicado', () => {
-  const input = structuredClone(fixtureEntrada);
+  const input = structuredClone(fixtureCanonico);
   input.segments[1].segmentId = input.segments[0].segmentId;
   const result = validateCleanInput(input);
   assert.equal(result.valid, false);
   assert.ok(result.errors.some((e) => e.includes('duplicado')));
 });
 
-test('rechaza un segmento que use "id" en vez de "segmentId" (no es el contrato canónico)', () => {
-  const input = structuredClone(fixtureEntrada);
-  input.segments[0].id = input.segments[0].segmentId;
-  delete input.segments[0].segmentId;
+test('rechaza speakerId de segmento que no corresponde a ningún hablante declarado', () => {
+  const input = structuredClone(fixtureCanonico);
+  input.segments[0].speakerId = 'spk-fantasma';
   const result = validateCleanInput(input);
   assert.equal(result.valid, false);
-  assert.ok(result.errors.some((e) => e.includes('segmentId')));
+  assert.ok(result.errors.some((e) => e.includes('no corresponde a ningún hablante')));
 });
 
-// --- ingest-adapter.js (id -> segmentId) -----------------------------------
-
-test('adapta speakers.json (APU-03, campo "id") al contrato canónico (segmentId)', () => {
-  // Se deriva mecánicamente del fixture aprobado caso-001-entrada.json,
-  // simulando la forma real de salida de APU-03 (docs/CONTRACTS.md §5):
-  // segmentId -> id, y sin studyId/covariates/sourceRefs (los aporta el formulario).
-  const speakersJson = {
-    schemaVersion: '1.0.0',
-    ecosystem: 'APU',
-    unit: 'APU-03',
-    stage: 'speaker-segmentation',
-    speakers: [
-      { id: 'spk-1', label: 'Entrevistador' },
-      { id: 'spk-2', label: 'Participante' },
-    ],
-    segments: fixtureEntrada.segments.map((s) => ({
-      id: s.segmentId,
-      speakerId: s.speakerId,
-      start: s.start,
-      end: s.end,
-      text: s.text,
-    })),
-  };
-
-  const formData = {
-    studyId: fixtureEntrada.studyId,
-    covariates: fixtureEntrada.covariates,
-    sourceRefs: fixtureEntrada.sourceRefs,
-  };
-
-  const adapted = adaptSpeakersOutput(speakersJson, formData);
-
-  // El resultado adaptado debe pasar el validador del contrato canónico.
-  const validation = validateCleanInput(adapted);
-  assert.equal(validation.valid, true, `Errores inesperados: ${JSON.stringify(validation.errors)}`);
-
-  // El mapeo id -> segmentId debe preservar el valor y el orden.
-  assert.equal(adapted.segments.length, fixtureEntrada.segments.length);
-  adapted.segments.forEach((seg, i) => {
-    assert.equal(seg.segmentId, fixtureEntrada.segments[i].segmentId);
-    assert.equal(seg.text, fixtureEntrada.segments[i].text);
-    assert.equal(seg.start, fixtureEntrada.segments[i].start);
-    assert.equal(seg.end, fixtureEntrada.segments[i].end);
-    assert.equal(seg.speakerId, fixtureEntrada.segments[i].speakerId);
-    // El adaptador no debe dejar el campo "id" residual en la salida.
-    assert.equal('id' in seg, false);
-  });
-
-  // confidence ausente en APU-03 -> null explícito, no omitido.
-  assert.equal(adapted.segments[0].confidence, null);
+test('rechaza id de hablante duplicado', () => {
+  const input = structuredClone(fixtureCanonico);
+  input.speakers.push({ id: input.speakers[0].id, label: 'Duplicado', covariates: {} });
+  const result = validateCleanInput(input);
+  assert.equal(result.valid, false);
+  assert.ok(result.errors.some((e) => e.includes('duplicado')));
 });
 
-test('el adaptador completa covariates/sourceRefs con null explícito si faltan claves', () => {
-  const speakersJson = {
-    segments: [
-      { id: 'seg-x', speakerId: 'spk-1', start: 0, end: 1, text: 'hola' },
-    ],
-  };
-  const formData = { studyId: 'estudio-x', covariates: { caseId: 'c1' }, sourceRefs: {} };
+// --- ingest-adapter.js --------------------------------------------------------
 
-  const adapted = adaptSpeakersOutput(speakersJson, formData);
+test('adaptSpeakersOutput mapea segments[].id -> segmentId y produce entrada válida', () => {
+  const adapted = adaptSpeakersOutput(fixtureSpeakersV3, { sourceSession: 'test-session' });
+  const result = validateCleanInput(adapted);
+  assert.equal(result.valid, true, `Errores inesperados: ${JSON.stringify(result.errors)}`);
+  assert.equal(adapted.segments[0].segmentId, 'seg-001');
+  assert.equal('id' in adapted.segments[0], false);
+});
 
-  assert.equal(adapted.covariates.caseId, 'c1');
-  assert.equal(adapted.covariates.age, null); // faltaba, debe quedar null explícito
-  assert.equal('age' in adapted.covariates, true); // la clave debe existir, no estar omitida
-  assert.equal(adapted.sourceRefs.sourceAudioFileName, null);
-  assert.equal('sourceAudioFileName' in adapted.sourceRefs, true);
+test('adaptSpeakersOutput preserva start/end/speakerId/speaker sin modificar', () => {
+  const adapted = adaptSpeakersOutput(fixtureSpeakersV3, {});
+  const original = fixtureSpeakersV3.segments[1];
+  const mapped = adapted.segments[1];
+  assert.equal(mapped.start, original.start);
+  assert.equal(mapped.end, original.end);
+  assert.equal(mapped.speakerId, original.speakerId);
+  assert.equal(mapped.speaker, original.speaker);
+});
+
+test('adaptSpeakersOutput conserva speakers[]/covariateProject/covariateSchema intactos (passthrough, Regla 1)', () => {
+  const adapted = adaptSpeakersOutput(fixtureSpeakersV3, {});
+  assert.deepEqual(adapted.speakers, fixtureSpeakersV3.speakers);
+  assert.deepEqual(adapted.covariateProject, fixtureSpeakersV3.covariateProject);
+  assert.deepEqual(adapted.covariateSchema, fixtureSpeakersV3.covariateSchema);
+});
+
+test('adaptSpeakersOutput acepta covariateProject/covariateSchema ausentes (null) sin bloquear (Regla 1: cero bloqueo por VarOps ausente)', () => {
+  const withoutVarOps = structuredClone(fixtureSpeakersV3);
+  delete withoutVarOps.covariateProject;
+  delete withoutVarOps.covariateSchema;
+  const adapted = adaptSpeakersOutput(withoutVarOps, {});
+  assert.equal(adapted.covariateProject, null);
+  assert.equal(adapted.covariateSchema, null);
+  const result = validateCleanInput(adapted);
+  assert.equal(result.valid, true, `Errores inesperados: ${JSON.stringify(result.errors)}`);
+});
+
+test('adaptSpeakersOutput acepta speakers[] con covariates vacío sin exigir claves fijas', () => {
+  const noCovariates = structuredClone(fixtureSpeakersV3);
+  noCovariates.speakers.forEach((s) => delete s.covariates);
+  const adapted = adaptSpeakersOutput(noCovariates, {});
+  adapted.speakers.forEach((s) => assert.deepEqual(s.covariates, {}));
+});
+
+test('adaptSpeakersOutput rechaza un archivo sin segments[]', () => {
+  assert.throws(() => adaptSpeakersOutput({ speakers: [] }, {}), /segments/);
+});
+
+test('adaptSpeakersOutput rechaza una entrada no-objeto', () => {
+  assert.throws(() => adaptSpeakersOutput(null, {}), /no se pudo leer/i);
 });

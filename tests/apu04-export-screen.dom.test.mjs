@@ -1,124 +1,156 @@
 /**
  * Cubre: src/ui/export-screen.js (renderizado DOM). Usa jsdom y el pipeline
- * real sobre el fixture existente, aceptando todos los segmentos y
- * finalizando antes de exportar.
+ * real sobre el fixture canónico, finalizando antes de exportar.
  */
 
-import { test, before, after, beforeEach, afterEach } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { installDomEnv } from './helpers/dom-env.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 let teardown;
 before(() => {
   ({ teardown } = installDomEnv());
 });
-after(() => {
-  teardown();
-});
+after(() => teardown());
 
 const { renderExportScreen } = await import('../src/ui/export-screen.js');
 const { runCleanPipeline } = await import('../src/core/clean-pipeline.js');
 const { acceptSegment, finalizeCleanJson } = await import('../src/ui/review-view.js');
+const { buildCleanedPackage } = await import('../src/core/export-package.js');
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const glossary = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'assets', 'data', 'glossary.json'), 'utf-8'),
 ).entries;
-const nerPatternsTemplate = JSON.parse(
+const nerPatternsBase = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'assets', 'data', 'ner-patterns.json'), 'utf-8'),
 );
 const entrada = JSON.parse(
-  readFileSync(path.join(__dirname, 'fixtures', 'apu04', 'caso-001-entrada.json'), 'utf-8'),
+  readFileSync(path.join(__dirname, 'fixtures', 'apu04', 'caso-001-canonico.json'), 'utf-8'),
 );
 
-async function buildFinalizedCleanJsonAndBuffer() {
-  const nerPatterns = { ...nerPatternsTemplate, listMatchers: nerPatternsTemplate.listMatchers.map((m) => ({ ...m })) };
-  nerPatterns.listMatchers.find((m) => m.source === 'covariates.site').values = ['Hospital Central'];
-  const { cleanJson, piiBuffer } = await runCleanPipeline(entrada, glossary, nerPatterns);
-  let state = cleanJson;
-  state = { ...state, segments: state.segments.map((s) => acceptSegment(s)) };
-  state = finalizeCleanJson(state);
-  return { cleanJson: state, piiBuffer };
+async function buildFinalizedCleanJson(nerOptInActive) {
+  const nerPatterns = structuredClone(nerPatternsBase);
+  nerPatterns.listMatchers[0].values = ['juan perez'];
+  nerPatterns.listMatchers[1].values = ['hospital central'];
+  const { cleanJson, piiBuffer } = await runCleanPipeline(entrada, glossary, nerPatterns, nerOptInActive);
+  const reviewed = cleanJson.segments.map((s) => (s.anomalous ? acceptSegment(s) : s));
+  const finalized = finalizeCleanJson({ ...cleanJson, segments: reviewed });
+  return { cleanJson: finalized, piiBuffer };
 }
 
-let container;
-beforeEach(() => {
-  container = document.createElement('div');
-  document.body.appendChild(container);
-});
-afterEach(() => {
-  container.remove();
-});
-
-test('renderExportScreen muestra un resumen de calidad con los totales del caso', async () => {
-  const { cleanJson, piiBuffer } = await buildFinalizedCleanJsonAndBuffer();
-  renderExportScreen(container, cleanJson, piiBuffer);
-
-  const dl = container.querySelector('dl');
-  assert.ok(dl);
-  assert.match(dl.textContent, new RegExp(String(cleanJson.segments.length)));
-});
-
-test('renderExportScreen bloquea la exportación si el caso no está finalizado', async () => {
-  const { cleanJson, piiBuffer } = await buildFinalizedCleanJsonAndBuffer();
+test('muestra advertencia y no botones de descarga si no está finalizado', async () => {
+  const { cleanJson } = await buildFinalizedCleanJson(false);
   const notFinalized = { ...cleanJson, auditLog: { ...cleanJson.auditLog, finalizedByHuman: false } };
-
-  renderExportScreen(container, notFinalized, piiBuffer);
-
-  const alertBox = container.querySelector('[role="alert"]');
-  assert.match(alertBox.textContent, /todavía no fue finalizada/);
-  assert.equal(container.querySelectorAll('button').length, 0);
+  const container = document.createElement('div');
+  renderExportScreen(container, 'caso-001', notFinalized, null);
+  assert.match(container.textContent, /todavía no fue finalizada/);
+  assert.equal(container.querySelectorAll('.download-card').length, 0);
 });
 
-test('renderExportScreen ofrece un botón de descarga para cada vista derivada más clean.json', async () => {
-  const { cleanJson, piiBuffer } = await buildFinalizedCleanJsonAndBuffer();
-  renderExportScreen(container, cleanJson, piiBuffer);
+test('genera los 5 archivos del paquete canónico con nombres [base]_[stage].[ext]', async () => {
+  const { cleanJson } = await buildFinalizedCleanJson(false);
+  const container = document.createElement('div');
+  renderExportScreen(container, 'caso-001', cleanJson, null);
 
-  const buttonLabels = [...container.querySelectorAll('button')].map((b) => b.textContent);
-  assert.ok(buttonLabels.some((t) => t.includes('clean.json')));
-  assert.ok(buttonLabels.some((t) => t.includes('clean.txt')));
-  assert.ok(buttonLabels.some((t) => t.includes('clean.csv')));
-  assert.ok(buttonLabels.some((t) => t.includes('quality-report.json')));
-  assert.ok(buttonLabels.some((t) => t.includes('glossary-hits.json')));
-  assert.ok(buttonLabels.some((t) => t.includes('flagged-segments.json')));
-  assert.ok(buttonLabels.some((t) => t.includes('edit-log.csv')));
-  assert.ok(buttonLabels.some((t) => t.includes('pii-buffer.local.json')));
+  const filenames = [...container.querySelectorAll('.download-filename')].map((el) => el.textContent);
+  assert.ok(filenames.includes('caso-001_cleaned.json'));
+  assert.ok(filenames.includes('caso-001_cleaned.csv'));
+  assert.ok(filenames.includes('caso-001_quality_report.json'));
+  assert.ok(filenames.includes('caso-001_edit_log.csv'));
+  assert.ok(filenames.includes('caso-001_trazabilidad.json'));
 });
 
-test('renderExportScreen muestra la advertencia de privacidad junto al botón de pii-buffer', async () => {
-  const { cleanJson, piiBuffer } = await buildFinalizedCleanJsonAndBuffer();
-  renderExportScreen(container, cleanJson, piiBuffer);
+test('mejora: el archivo principal descargado NO trae traza forense (usa buildCleanedPackage, no cleanJson crudo)', async () => {
+  const { cleanJson } = await buildFinalizedCleanJson(false);
+  const container = document.createElement('div');
 
-  const alertBox = container.querySelector('[role="alert"]');
-  assert.match(alertBox.textContent, /No compartir ni subir a red/);
-});
-
-test('renderExportScreen: al hacer clic en "Descargar clean.json" dispara una descarga con el nombre canónico', async () => {
-  const { cleanJson, piiBuffer } = await buildFinalizedCleanJsonAndBuffer();
-  renderExportScreen(container, cleanJson, piiBuffer);
-
-  let clicked = false;
+  let capturedFilename = null;
+  let capturedData = null;
+  const originalBlob = global.Blob;
+  global.Blob = class extends originalBlob {
+    constructor(parts, opts) {
+      super(parts, opts);
+      capturedData = parts[0];
+    }
+  };
   const originalCreateElement = document.createElement.bind(document);
   document.createElement = (tag) => {
     const el = originalCreateElement(tag);
     if (tag === 'a') {
-      el.click = () => {
-        clicked = true;
-        assert.match(el.download, /^estudio-ansiedad-2026_caso-001_clean\.json$/);
-      };
+      const originalClick = el.click.bind(el);
+      Object.defineProperty(el, 'download', {
+        get() { return this._download; },
+        set(value) { capturedFilename = value; this._download = value; },
+      });
+      el.click = originalClick;
     }
     return el;
   };
 
-  const cleanJsonButton = [...container.querySelectorAll('button')].find((b) =>
-    b.textContent.includes('clean.json'),
-  );
-  cleanJsonButton.click();
+  renderExportScreen(container, 'caso-001', cleanJson, null);
+  const mainButton = container.querySelector('.download-card.is-highlight');
+  mainButton.click();
 
-  assert.equal(clicked, true);
   document.createElement = originalCreateElement;
+  global.Blob = originalBlob;
+
+  assert.equal(capturedFilename, 'caso-001_cleaned.json');
+  const parsed = JSON.parse(capturedData);
+  const expected = buildCleanedPackage(cleanJson);
+  assert.deepEqual(parsed, expected);
+  assert.equal(JSON.stringify(parsed).includes('modificationsLog'), false);
+  assert.equal(JSON.stringify(parsed).includes('originalText'), false);
+});
+
+test('sin modo confidencial (piiBuffer null): no aparece la sección de registro de datos ocultados', async () => {
+  const { cleanJson } = await buildFinalizedCleanJson(false);
+  const container = document.createElement('div');
+  renderExportScreen(container, 'caso-001', cleanJson, null);
+  assert.equal(container.textContent.includes('Registro de datos ocultados'), false);
+});
+
+test('con modo confidencial activo: aparece la sección de datos ocultados con advertencia', async () => {
+  const { cleanJson, piiBuffer } = await buildFinalizedCleanJson(true);
+  const container = document.createElement('div');
+  renderExportScreen(container, 'caso-001', cleanJson, piiBuffer);
+  assert.match(container.textContent, /Registro de datos ocultados/);
+  assert.match(container.textContent, /no compartir/i);
+  const filenames = [...container.querySelectorAll('.download-filename')].map((el) => el.textContent);
+  assert.ok(filenames.includes('caso-001_pii-buffer.local.json'));
+});
+
+test('mejora: destaca visualmente el archivo principal y explica para qué sirve cada archivo', async () => {
+  const { cleanJson } = await buildFinalizedCleanJson(false);
+  const container = document.createElement('div');
+  renderExportScreen(container, 'caso-001', cleanJson, null);
+
+  const highlighted = container.querySelector('.download-card.is-highlight');
+  assert.ok(highlighted, 'debe existir un archivo destacado como principal');
+  assert.match(highlighted.textContent, /úselo para el análisis/i);
+
+  const descriptions = [...container.querySelectorAll('.download-description')].map((el) => el.textContent);
+  assert.ok(descriptions.length >= 4, 'cada archivo debe tener una descripción de para qué sirve');
+});
+
+test('mejora: no usa nombres de módulo del ecosistema (APU-05) en el texto visible al usuario', async () => {
+  const { cleanJson } = await buildFinalizedCleanJson(false);
+  const container = document.createElement('div');
+  renderExportScreen(container, 'caso-001', cleanJson, null);
+  assert.equal(/APU-0\d/.test(container.textContent), false);
+});
+
+test('mejora: muestra cuántas correcciones automáticas de puntuación se aplicaron', async () => {
+  const { cleanJson } = await buildFinalizedCleanJson(false);
+  const container = document.createElement('div');
+  renderExportScreen(container, 'caso-001', cleanJson, null);
+  assert.match(container.textContent, /Texto ordenado automáticamente/);
+});
+
+test('rechaza un contenedor inválido', async () => {
+  const { cleanJson } = await buildFinalizedCleanJson(false);
+  assert.throws(() => renderExportScreen(null, 'caso-001', cleanJson, null), /contenedor válido/);
 });

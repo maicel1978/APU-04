@@ -28,11 +28,11 @@ const nerPatterns = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'assets', 'data', 'ner-patterns.json'), 'utf-8'),
 );
 const entrada = JSON.parse(
-  readFileSync(path.join(__dirname, 'fixtures', 'apu04', 'caso-001-entrada.json'), 'utf-8'),
+  readFileSync(path.join(__dirname, 'fixtures', 'apu04', 'caso-001-canonico.json'), 'utf-8'),
 );
 
 async function buildCleanJson() {
-  const { cleanJson } = await runCleanPipeline(entrada, glossary, nerPatterns);
+  const { cleanJson } = await runCleanPipeline(entrada, glossary, nerPatterns, true);
   return cleanJson;
 }
 

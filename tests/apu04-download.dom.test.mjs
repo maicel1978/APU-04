@@ -90,10 +90,10 @@ test('downloadCsvFile usa el tipo MIME text/csv', () => {
   global.Blob = originalBlob;
 });
 
-test('buildFileName sigue la convención [study]_[case]_[stage].[ext] y sanea caracteres inválidos', () => {
-  assert.equal(buildFileName('Estudio Ansiedad 2026', 'Caso 001', 'clean', 'json'), 'estudio-ansiedad-2026_caso-001_clean.json');
+test('buildFileName sigue la convención [base]_[stage].[ext] y sanea caracteres inválidos', () => {
+  assert.equal(buildFileName('Estudio Ansiedad 2026 Caso 001', 'cleaned', 'json'), 'estudio-ansiedad-2026-caso-001_cleaned.json');
 });
 
-test('buildFileName usa valores de reserva si studyId/caseId son null', () => {
-  assert.equal(buildFileName(null, null, 'clean', 'json'), 'estudio_caso_clean.json');
+test('buildFileName usa un valor de reserva si base es null', () => {
+  assert.equal(buildFileName(null, 'cleaned', 'json'), 'archivo_cleaned.json');
 });

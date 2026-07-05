@@ -22,7 +22,7 @@ const nerPatterns = JSON.parse(
   readFileSync(path.join(__dirname, '..', 'assets', 'data', 'ner-patterns.json'), 'utf-8'),
 );
 const entrada = JSON.parse(
-  readFileSync(path.join(__dirname, 'fixtures', 'apu04', 'caso-001-entrada.json'), 'utf-8'),
+  readFileSync(path.join(__dirname, 'fixtures', 'apu04', 'caso-001-canonico.json'), 'utf-8'),
 );
 
 /**
@@ -59,21 +59,40 @@ test('el Worker responde PIPELINE_RESULT ante un mensaje RUN_PIPELINE válido', 
   assert.equal(receivedMessages.length, 1);
   assert.equal(receivedMessages[0].type, 'PIPELINE_RESULT');
   assert.ok(receivedMessages[0].cleanJson);
-  assert.ok(receivedMessages[0].piiBuffer);
+  // Sin nerOptInActive en el payload (default false, Regla 3): no se genera piiBuffer.
+  assert.equal(receivedMessages[0].piiBuffer, null);
   assert.equal(receivedMessages[0].cleanJson.segments.length, entrada.segments.length);
 });
 
-test('el Worker responde PIPELINE_ERROR con mensaje en español ante una entrada inválida', async () => {
+test('el Worker responde PIPELINE_ERROR con el motivo real y específico (no un mensaje genérico), ante una entrada inválida', async () => {
+  // BUGFIX (2026-07): antes el Worker siempre enviaba un mensaje genérico
+  // ("No se pudo procesar la entrevista...") y el motivo real solo viajaba
+  // en `detail`, que la UI nunca leía. Ahora `message` lleva el motivo real
+  // (ya redactado en español y sin datos sensibles por schema-validator.js),
+  // para que el usuario sepa qué corregir sin abrir la consola.
   const { fakeSelf, receivedMessages } = await loadWorkerModule();
 
-  const invalidInput = { studyId: 'x' }; // sin segments[], sin covariates, etc.
+  const invalidInput = { studyId: 'x' }; // sin speakers[]/segments[]/sourceRefs
   await fakeSelf.onmessage({
     data: { type: 'RUN_PIPELINE', canonicalInput: invalidInput, glossaryEntries: glossary, nerPatterns },
   });
 
   assert.equal(receivedMessages.length, 1);
   assert.equal(receivedMessages[0].type, 'PIPELINE_ERROR');
-  assert.match(receivedMessages[0].message, /No se pudo procesar/);
+  assert.match(receivedMessages[0].message, /entrada no es válida/);
+  assert.match(receivedMessages[0].message, /speakers/);
+  assert.equal(receivedMessages[0].message, receivedMessages[0].detail);
+});
+
+test('el Worker cae al mensaje genérico solo si el error no trae texto propio (defensivo)', async () => {
+  const { fakeSelf, receivedMessages } = await loadWorkerModule();
+  // canonicalInput no-objeto: dispara una ruta de error distinta a la de validación,
+  // igualmente con mensaje propio de schema-validator.js/clean-pipeline.js.
+  await fakeSelf.onmessage({
+    data: { type: 'RUN_PIPELINE', canonicalInput: null, glossaryEntries: glossary, nerPatterns },
+  });
+  assert.equal(receivedMessages[0].type, 'PIPELINE_ERROR');
+  assert.ok(receivedMessages[0].message.length > 0);
 });
 
 test('el Worker responde PIPELINE_ERROR ante un tipo de mensaje no reconocido', async () => {

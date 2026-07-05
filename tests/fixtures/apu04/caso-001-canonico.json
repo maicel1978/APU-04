@@ -1,14 +1,18 @@
 {
-  "studyId": "estudio-ansiedad-2026",
-  "covariates": {
-    "caseId": "caso-001",
-    "group": "intervencion",
-    "moment": "pre",
-    "sex": "F",
-    "age": 34,
-    "site": "Hospital Central",
-    "diagnosis": "Trastorno de ansiedad generalizada"
-  },
+  "sourceSession": "estudio-ansiedad-2026-caso-001",
+  "speakers": [
+    { "id": "spk-1", "label": "Entrevistador", "covariates": {} },
+    {
+      "id": "spk-2",
+      "label": "Paciente, principal",
+      "covariates": { "grupo_estudio": "Intervención", "sitio": "Hospital Central" }
+    }
+  ],
+  "covariateProject": { "projectId": "VAROPS-001", "projectName": "Estudio de ansiedad 2026" },
+  "covariateSchema": [
+    { "key": "grupo_estudio", "type": "Nominal Politómica" },
+    { "key": "sitio", "type": "Nominal Politómica" }
+  ],
   "sourceRefs": {
     "sourceAudioFileName": "estudio-ansiedad-2026_caso-001_prepared.wav",
     "sourceManifestRef": "estudio-ansiedad-2026_caso-001_prepared_manifest.json",
@@ -23,6 +27,7 @@
       "start": 0.0,
       "end": 4.0,
       "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
       "confidence": 0.91
     },
     {
@@ -31,6 +36,7 @@
       "start": 4.0,
       "end": 9.0,
       "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
       "confidence": 0.78
     },
     {
@@ -39,6 +45,7 @@
       "start": 9.0,
       "end": 11.0,
       "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
       "confidence": null
     },
     {
@@ -47,6 +54,7 @@
       "start": 17.0,
       "end": 20.0,
       "speakerId": "spk-1",
+      "speaker": "Entrevistador",
       "confidence": 0.95
     },
     {
@@ -55,6 +63,7 @@
       "start": 20.0,
       "end": 30.0,
       "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
       "confidence": 0.55
     },
     {
@@ -63,6 +72,7 @@
       "start": 30.5,
       "end": 34.5,
       "speakerId": "spk-2",
+      "speaker": "Paciente, principal",
       "confidence": 0.93
     }
   ]
